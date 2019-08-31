@@ -5,7 +5,9 @@ with import <nixpkgs/nixos/lib/qemu-flags.nix> { inherit pkgs; };
 
 let
   system = config.nixpkgs.localSystem.system;
+  qemu = qemuBinary pkgs.qemu;
 in {
+
   options = {
 
     boot.isVirtualMachine = mkOption {
@@ -166,31 +168,25 @@ in {
     };
     mkBackingImagePath = cfg: "${mkBackingImage cfg}/nixos.qcow2";
 
-    unitTemplate = {
+    defaultService = {
       description = "Virtual Machine '%i'";
-
       path = [ pkgs.qemu_kvm ];
-
-      environment.INSTANCE = "%i";
-    };
-
-    defaultService = unitTemplate // {
+      restartIfChanged = mkDefault false;
       serviceConfig.ExecStart = "${pkgs.coreutils}/bin/true";
     };
 
     mkQemuCommand = cfg: let
-      cmd = qemuBinary pkgs.qemu;
       switches = cfg.qemuSwitches ++ [
         ''drive file=${cfg.rootImagePath},if=virtio,aio=threads,format=qcow2''
       ];
-      options = concatStringsSep " " (map (v: "-${v}") switches);
-    in "${cmd} ${options}";
+      options = map (v: "-${v}") switches;
+    in concatStringsSep " " ([ qemu ] ++ options);
 
     mkService = cfg: let
       backingFile = mkBackingImagePath cfg;
-    in unitTemplate // {
+    in defaultService // {
       enable = cfg.autoStart;
-      wantedBy = optional cfg.autoStart "multi-user.target";
+      wantedBy = optional cfg.autoStart "machines.target";
 
       preStart = ''
         mkdir -p "$(dirname ${cfg.rootImagePath})"
@@ -198,7 +194,10 @@ in {
         qemu-img rebase -f qcow2 -b ${backingFile} "${cfg.rootImagePath}"
       '';
       serviceConfig.ExecStart = mkQemuCommand cfg;
+
+      # TODO: Remove the rest to prevent unwanted restarts during nixos-rebuild while VM's are in use
       restartTriggers = [ backingFile ];
+      restartIfChanged = true;
     };
     mkNamedService = name: cfg: nameValuePair "vm@${name}" (mkService cfg);
 
