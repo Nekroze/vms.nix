@@ -42,41 +42,15 @@ in {
                 name = "Toplevel NixOS config";
                 merge = loc: defs: (import <nixpkgs/nixos/lib/eval-config.nix> {
                   inherit system;
-                  modules = [
-                    rec {
-
-                      imports = [
-                        ./default.nix
-                        <nixpkgs/nixos/modules/profiles/qemu-guest.nix>
-                        <nixpkgs/nixos/modules/profiles/headless.nix>
-                      ];
-                      boot.isVirtualMachine = true;
+                  modules = [{
                       networking.hostName = mkDefault name;
-                      networking.useDHCP = mkDefault false;
-                      fileSystems."/" = {
-                        device = "/dev/disk/by-label/nixos";
-                        autoResize = true;
-                        fsType = "ext4";
-                      };
-                      boot.growPartition = true;
-                      boot.loader.grub.device = "/dev/sda";
-                      boot.kernelParams = [ "console=${qemuSerialDevice}" ];
-
-                    } ] ++ (map (x: x.value) defs);
+                      imports = [ # Import the vm profile for all guests
+                        ./vm-profile.nix
+                      ];
+                    }] ++ (map (x: x.value) defs);
                   prefix = [ "virtualMachines" name ];
                 }).config;
               };
-            };
-
-            path = mkOption {
-              type = types.path;
-              example = "/nix/var/nix/profiles/vms/webserver";
-              description = ''
-                As an alternative to specifying
-                <option>config</option>, you can specify the path to
-                the evaluated NixOS system configuration, typically a
-                symlink to a system profile.
-              '';
             };
 
             rootImagePath = mkOption {
@@ -131,7 +105,6 @@ in {
           };
 
           config = mkIf options.config.isDefined {
-            path = config.config.system.build.toplevel;
           };
         }));
 
