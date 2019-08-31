@@ -6,6 +6,7 @@ with import <nixpkgs/nixos/lib/qemu-flags.nix> { inherit pkgs; };
 let
   system = config.nixpkgs.localSystem.system;
   qemu = qemuBinary pkgs.qemu;
+  vmOptions = import ./vm-options.nix { inherit lib system; };
 in {
 
   options = {
@@ -28,86 +29,7 @@ in {
     };
 
     virtualMachines = mkOption {
-      type = types.attrsOf (types.submodule (
-        { config, options, name, ... }:
-        {
-          options = {
-
-            config = mkOption {
-              description = ''
-                A specification of the desired configuration of this
-                virtual machine, as a NixOS module.
-              '';
-              type = lib.mkOptionType {
-                name = "Toplevel NixOS config";
-                merge = loc: defs: (import <nixpkgs/nixos/lib/eval-config.nix> {
-                  inherit system;
-                  modules = [{
-                      networking.hostName = mkDefault name;
-                      imports = [ # Import the vm profile for all guests
-                        ./vm-profile.nix
-                      ];
-                    }] ++ (map (x: x.value) defs);
-                  prefix = [ "virtualMachines" name ];
-                }).config;
-              };
-            };
-
-            rootImagePath = mkOption {
-              type = types.str;
-              default = "/var/lib/vms/${name}.qcow2";
-              description = ''
-                Path to store the root image.
-              '';
-            };
-
-            rootImageSize = mkOption {
-              type = types.int;
-              default = 10 * 1024;
-              description = ''
-                The size of the root image in MiB.
-              '';
-            };
-
-            baseImageSize = mkOption {
-              type = types.int;
-              default = 10 * 1024;
-              description = ''
-                The size of the base image in MiB.
-              '';
-            };
-
-            qemuSwitches = mkOption {
-              type = types.listOf types.str;
-              default = [
-                "nographic" "enable-kvm"
-                "device virtio-rng-pci"
-                "device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3"
-                "cpu host"
-                "smp sockets=1,cpus=4,cores=2"
-                "m 1024"
-                "vga none"
-              ];
-              description = ''
-                Switches given to QEMU cli when starting this virtual machine.
-                All switches will have - prepended automatically.
-              '';
-            };
-
-            autoStart = mkOption {
-              type = types.bool;
-              default = false;
-              description = ''
-                Whether the virtual machine is automatically started at boot-time.
-              '';
-            };
-
-          };
-
-          config = mkIf options.config.isDefined {
-          };
-        }));
-
+      type = types.attrsOf (types.submodule vmOptions);
       default = {};
       example = literalExample
         ''
