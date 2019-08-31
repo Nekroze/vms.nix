@@ -42,6 +42,14 @@ with lib;
       '';
     };
 
+    rootImageFormat = mkOption {
+      type = types.enum ["qcow2" "raw"];
+      default = "qcow2";
+      description = ''
+        The format of the root image.
+      '';
+    };
+
     baseImageSize = mkOption {
       type = types.int;
       default = 10 * 1024;
@@ -50,16 +58,25 @@ with lib;
       '';
     };
 
+    baseImageFormat = mkOption {
+      type = types.enum ["qcow2" "raw"];
+      default = "qcow2";
+      description = ''
+        The format of the base image.
+      '';
+    };
+
+    memory = mkOption {
+      type = types.int;
+      default = 512;
+      description = ''
+        Size in MiB of memory to assign this virtual machine
+      '';
+    };
+
     qemuSwitches = mkOption {
       type = types.listOf types.str;
-      default = [
-        "nographic" "enable-kvm"
-        "vga none"
-        "device virtio-rng-pci"
-        "cpu host"
-        "smp sockets=1,cpus=1,cores=1"
-        "m 512"
-      ];
+      default = [];
       description = ''
         Switches given to QEMU cli when starting this virtual machine.
         All switches will have - prepended automatically.
@@ -74,8 +91,37 @@ with lib;
       '';
     };
 
+    cpu = mkOption {
+      type = types.str;
+      default = "host";
+      description = ''
+        The CPU model to emulate.
+      '';
+    };
+
+    cores = mkOption {
+      type = types.int;
+      default = 1;
+      description = ''
+        The number of CPU cores this virtual machine has access to.
+      '';
+    };
+
+    kvm = mkEnableOption "Kernal Virtual Machine acceleration";
+    virtioRNG = mkEnableOption "Virtio accelerated Random Number Generator";
+    memoryBalloon = mkEnableOption "Virtio memory ballooning";
   };
 
   config = mkIf options.config.isDefined {
+    qemuSwitches = with config; [
+      "nographic"
+      "vga none"
+      "m ${toString memory}"
+      "cpu ${cpu}"
+      "smp ${toString cores}"
+    ]
+    ++ optional kvm "enable-kvm"
+    ++ optional memoryBalloon "device virtio-balloon,automatic=true"
+    ++ optional virtioRNG "device virtio-rng-pci";
   };
 }

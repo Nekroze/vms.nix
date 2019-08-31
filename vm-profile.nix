@@ -10,7 +10,6 @@ with import <nixpkgs/nixos/lib/qemu-flags.nix> { inherit pkgs; };
     <nixpkgs/nixos/modules/profiles/headless.nix>
   ];
   boot.isVirtualMachine = true;
-  networking.useDHCP = mkDefault false;
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";
     autoResize = true;
