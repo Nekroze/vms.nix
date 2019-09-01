@@ -28,7 +28,7 @@ with lib;
 
     rootImagePath = mkOption {
       type = types.str;
-      default = "/var/lib/vms/${name}.qcow2";
+      default = "/var/lib/vms/${name}.${config.rootImageFormat}";
       description = ''
         Path to store the root image.
       '';

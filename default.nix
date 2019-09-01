@@ -15,14 +15,14 @@ in {
       type = types.bool;
       default = false;
       description = ''
-        Whether this NixOS machine is a QEMU jirtual machine running
+        Whether this NixOS machine is a QEMU virtual machine running
         in another NixOS system.
       '';
     };
 
     boot.enableVirtualMachines = mkOption {
       type = types.bool;
-      default = !config.boot.isContainer;
+      default = false;
       description = ''
         Whether to enable support for NixOS virtual machines.
       '';
@@ -59,9 +59,9 @@ in {
       inherit lib pkgs;
       config = cfg.config;
       diskSize = cfg.baseImageSize;
-      format = "qcow2";
+      format = cfg.baseImageFormat;
     };
-    mkBackingImagePath = cfg: "${mkBackingImage cfg}/nixos.qcow2";
+    mkBackingImagePath = cfg: "${mkBackingImage cfg}/nixos.${cfg.baseImageFormat}";
 
     defaultService = {
       description = "Virtual Machine '%i'";
@@ -72,27 +72,32 @@ in {
 
     mkQemuCommand = cfg: let
       switches = cfg.qemuSwitches ++ [
-        ''drive file=${cfg.rootImagePath},if=virtio,aio=threads,format=qcow2''
+        ''drive file=${cfg.rootImagePath},if=virtio,aio=threads,format=${cfg.rootImageFormat}''
       ];
       options = map (v: "-${v}") switches;
     in concatStringsSep " " ([ qemu ] ++ options);
 
-    mkService = cfg: let
-      backingFile = mkBackingImagePath cfg;
-    in defaultService // {
+    mkService = cfg: defaultService // {
       enable = cfg.autoStart;
       wantedBy = optional cfg.autoStart "machines.target";
 
-      preStart = ''
-        mkdir -p "$(dirname ${cfg.rootImagePath})"
-        [ -f "$root" ] || qemu-img create -f qcow2 -F qcow2 -b ${backingFile} "${cfg.rootImagePath}" "${toString cfg.rootImageSize}M"
-        qemu-img rebase -f qcow2 -b ${backingFile} "${cfg.rootImagePath}"
+      preStart = let
+        backingFile = mkBackingImagePath cfg;
+        # TODO: See if rebase can be made smarter and only do it when neccesary
+        imgOpts = [
+          "-f ${cfg.rootImageFormat}" "-F ${cfg.baseImageFormat}" "-b ${backingFile}"
+        ];
+        imgCreateArgs = [ "${cfg.rootImagePath}" "${toString cfg.rootImageSize}M" ];
+        imgRebaseArgs = [ "${cfg.rootImagePath}" ];
+      in ''
+        if [ ! -f "$root" ]; then
+          mkdir -p "$(dirname ${cfg.rootImagePath})"
+          qemu-img create ${concatStringsSep " " (imgOpts ++ imgCreateArgs)}
+        else
+          qemu-img rebase ${concatStringsSep " " (imgOpts ++ imgRebaseArgs)}
+        fi
       '';
       serviceConfig.ExecStart = mkQemuCommand cfg;
-
-      # TODO: Remove the rest to prevent unwanted restarts during nixos-rebuild while VM's are in use
-      restartTriggers = [ backingFile ];
-      restartIfChanged = true;
     };
     mkNamedService = name: cfg: nameValuePair "vm@${name}" (mkService cfg);
 
